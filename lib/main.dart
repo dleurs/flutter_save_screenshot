@@ -1,4 +1,13 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+
+import 'package:http/http.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share/share.dart';
 
 void main() {
   runApp(MyApp());
@@ -47,6 +56,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  final _shareKey = GlobalKey();
 
   void _incrementCounter() {
     setState(() {
@@ -73,34 +83,49 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
+      body: RepaintBoundary(
+        key: _shareKey,
+        child: Center(
+          // Center is a layout widget. It takes a single child and positions it
+          // in the middle of the parent.
+          child: Column(
+            // Column is also a layout widget. It takes a list of children and
+            // arranges them vertically. By default, it sizes itself to fit its
+            // children horizontally, and tries to be as tall as its parent.
+            //
+            // Invoke "debug painting" (press "p" in the console, choose the
+            // "Toggle Debug Paint" action from the Flutter Inspector in Android
+            // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
+            // to see the wireframe for each widget.
+            //
+            // Column has various properties to control how it sizes itself and
+            // how it positions its children. Here we use mainAxisAlignment to
+            // center the children vertically; the main axis here is the vertical
+            // axis because Columns are vertical (the cross axis would be
+            // horizontal).
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                'You have pushed the button this many times:',
+              ),
+              Text(
+                '$_counter',
+                style: Theme.of(context).textTheme.headline4,
+              ),
+              ElevatedButton(
+                  onPressed: () async {
+                    var img = await capturePng();
+                    var imgFilePath = await pngToFilePath(img!);
+                    //final RenderBox box = context.findRenderObject() as RenderBox;
+                    Share.shareFiles(
+                      [imgFilePath],
+                      text: 'Text',
+                      subject: 'Subject',
+                    );
+                  },
+                  child: Text("Take screenshot and save"))
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -109,5 +134,27 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  Future<Uint8List?> capturePng() async {
+    RenderRepaintBoundary boundary = _shareKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    if (boundary.debugNeedsPaint) {
+      print("capturePng() : Waiting for boundary to be painted.");
+      await Future.delayed(const Duration(milliseconds: 20));
+      return capturePng();
+    }
+    ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+    ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    Uint8List? pngBytes = byteData?.buffer.asUint8List();
+    //Log.fine(pngBytes != null ? 'PNG bytes generated' : 'PNG bytes not generated');
+    return pngBytes;
+  }
+
+  Future<String> pngToFilePath(Uint8List img) async {
+    final directory = (await getApplicationDocumentsDirectory()).path;
+    String path = '$directory/screenshot_chanel_qrcode.png';
+    var imgFile = File(path);
+    await imgFile.writeAsBytes(img);
+    return path;
   }
 }
